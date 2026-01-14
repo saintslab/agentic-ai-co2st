@@ -3,6 +3,17 @@ import json
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+
+params = {'font.size': 18,
+#          'font.weight': 'bold',
+          'axes.labelsize':18,
+          'axes.titlesize':18,
+#          'axes.labelweight':'bold',
+          'axes.titleweight':'bold',
+          'legend.fontsize': 18,
+         }
+matplotlib.rcParams.update(params)
 
 def parse_carbon_data(log_dir="carbon_logs"):
     """
@@ -62,30 +73,31 @@ def plot_carbon_footprint(results):
                 means.append(0)
                 stds.append(0)
         
-        ax1.errorbar(levels, means, yerr=stds, label=f"{model} (Carbon)", 
+        ax1.errorbar(levels, means/means[0], yerr=stds/stds[0], label=f"{model}", 
                      fmt='-o', capsize=5, color=colors.get(model, None), 
-                     linewidth=2, markersize=8)
+                     linewidth=3, markersize=8)
 
     # Left Axis: Carbon Footprint
-    ax1.set_xlabel("Agency Level (Increasing Complexity)", fontsize=12)
-    ax1.set_ylabel("Estimated Carbon Footprint (gCO2eq)", fontsize=12, color='black')
+    ax1.set_xlabel("Agency Level ", fontsize=18)
+    ax1.set_ylabel("Estimated Carbon Footprint (relative)", fontsize=18, color='black')
     ax1.tick_params(axis='y', labelcolor='black')
     ax1.grid(True, linestyle='--', alpha=0.7)
+    ax1.plot(levels,np.ones(len(levels)),'--')
     
     # Right Axis: Energy Consumption
     ax2 = ax1.twinx()
     
     # We set the limits of ax2 to match ax1 scaled by the conversion factor
     y1_min, y1_max = ax1.get_ylim()
-    ax2.set_ylim(y1_min / CARBON_INTENSITY_FACTOR, y1_max / CARBON_INTENSITY_FACTOR)
-    ax2.set_ylabel("Estimated Energy Consumption (kWh)", fontsize=12, color='#555555')
+    ax2.set_ylim(y1_min / CARBON_INTENSITY_FACTOR*1000, y1_max / CARBON_INTENSITY_FACTOR*1000)
+    ax2.set_ylabel("Estimated Energy Consumption (relative)", fontsize=18, color='#555555')
     ax2.tick_params(axis='y', labelcolor='#555555')
 
-    plt.title("Carbon Footprint & Energy vs. Agentic Agency Level", fontsize=14, fontweight='bold')
+    #plt.title("Carbon Footprint & Energy vs. Agentic Agency Level", fontsize=14, fontweight='bold')
     ax1.legend(title="Model Variant", loc='upper left')
     
     plt.tight_layout()
-    plt.savefig("carbon_agency_analysis.png")
+    plt.savefig("carbon_agency_analysis.png",dpi=300)
     print("Plot generated and saved as carbon_agency_analysis.png")
     plt.show()
 
