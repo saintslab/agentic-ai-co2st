@@ -3,6 +3,15 @@ import json
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+
+params = {'font.size': 18,
+          'axes.labelsize':18,
+          'axes.titlesize':18,
+          'axes.titleweight':'bold',
+          'legend.fontsize': 18,
+         }
+matplotlib.rcParams.update(params)
 
 def visualize_results(log_root="carbon_logs"):
     """
@@ -34,15 +43,14 @@ def visualize_results(log_root="carbon_logs"):
                 results[model] = {l: {"gpu": [], "cpu": [], "total": [], "co2": []} 
                                  for l in ["none", "low", "medium", "high"]}
             g_e = m.get("gpu_energy_kwh", 0); c_e = m.get("cpu_energy_kwh", 0)
-            results[model][agency]["gpu"].append(g_e)
-            results[model][agency]["cpu"].append(c_e)
-            results[model][agency]["total"].append(m.get("total_energy_kwh", g_e + c_e))
+            results[model][agency]["gpu"].append(g_e*1000)
+            results[model][agency]["cpu"].append(c_e*1000)
+            results[model][agency]["total"].append(m.get("total_energy_kwh", (g_e + c_e)*1000))
             results[model][agency]["co2"].append(m.get("total_co2eq_g", 0))
         except (json.JSONDecodeError, IOError): continue
 
     fig, axs = plt.subplots(2, 3, figsize=(18, 12), sharex='col')
     levels = ["none", "low", "medium", "high"]
-    colors = {'gemma:2b': '#4285F4', 'gemma:7b': '#EA4335'}
     
     for model, data in results.items():
         b_gpu = np.mean(data["none"]["gpu"]) if data["none"]["gpu"] else 1e-10
@@ -58,19 +66,18 @@ def visualize_results(log_root="carbon_logs"):
             m_vals["t"].append(np.mean(t_v)); s_vals["t"].append(np.std(t_v))
             m_vals["g"].append(np.mean(g_v)); s_vals["g"].append(np.std(g_v))
             m_vals["c"].append(np.mean(c_v)); s_vals["c"].append(np.std(c_v))
-            m_vals["nt"].append(np.mean(t_v / b_tot)); s_vals["nt"].append(np.std(t_v / b_tot))
+            m_vals["nt"].append(np.mean(t_v) / b_tot); s_vals["nt"].append(np.std(t_v) / b_tot)
             m_vals["ng"].append(np.mean(g_v / b_gpu)); s_vals["ng"].append(np.std(g_v / b_gpu))
             m_vals["nc"].append(np.mean(c_v / b_cpu)); s_vals["nc"].append(np.std(c_v / b_cpu))
 
-        col = colors.get(model)
         for i, k in enumerate(["t", "g", "c"]):
-            axs[0, i].errorbar(levels, m_vals[k], yerr=s_vals[k], label=model, fmt='-o', capsize=4, color=col)
-            axs[1, i].errorbar(levels, m_vals["n"+k], yerr=s_vals["n"+k], label=model, fmt='-o', capsize=4, color=col)
+            axs[0, i].errorbar(levels, m_vals[k], yerr=s_vals[k], label=model, fmt='-o', capsize=4,linewidth=3) 
+            axs[1, i].errorbar(levels, m_vals["n"+k], yerr=s_vals["n"+k], label=model, fmt='-o', capsize=4,linewidth=3)
 
-    titles = ["Total Energy (kWh)", "GPU Energy (kWh)", "CPU Energy (kWh)"]
+    titles = ["Total Energy (Wh)", "GPU Energy (Wh)", "CPU Energy (Wh)"]
     for i, title in enumerate(titles):
         axs[0, i].set_title(f"Absolute {title}", fontweight='bold')
-        axs[1, i].set_title(f"Normalized {title} (None=1)", fontweight='bold')
+        axs[1, i].set_title(f"Normalized {title}", fontweight='bold')
         axs[1, i].set_xlabel("Agency Level")
         axs[1, i].axhline(y=1.0, color='black', linestyle='-', alpha=0.2)
     

@@ -9,7 +9,7 @@ from carbontracker.tracker import CarbonTracker
 from ddgs import DDGS
 import ollama
 
-MAX_RES = 10
+MAX_RES = 2
 
 class GemmaLocalAgenticTask:
     def __init__(self, model_name="gemma:2b", agency_level="none"):
@@ -154,7 +154,7 @@ def run_experiment(model_name, agency_level, keywords, run_index, session_dir):
         report = agent.execute(keywords)
     finally:
         tracker.epoch_end()
-    
+    tracker.stop() 
     hw_metrics = parse_last_run_from_log(session_dir)
     run_id = f"{model_name.replace(':', '-')}_{agency_level}_run{run_index}_{int(time.time())}"
     metadata = {
@@ -174,7 +174,7 @@ def run_experiment(model_name, agency_level, keywords, run_index, session_dir):
 
 if __name__ == "__main__":
     MODELS = ["qwen2.5:0.5b","qwen2.5:1.5b","qwen2.5:3b","qwen2.5:7b","gemma3:270m","gemma3:1b","gemma3:4b"]
-    LEVELS, REPS = ["none", "low", "medium", "high"], 5
+    LEVELS, REPS = ["none", "low", "medium", "high"], 10
     TOPIC = "literature review on environmental sustainability of AI"
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_dir = os.path.join("carbon_logs", f"session_{session_id}")
