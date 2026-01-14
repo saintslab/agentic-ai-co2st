@@ -152,10 +152,10 @@ def run_experiment(model_name, agency_level, keywords, run_index, log_dir="carbo
 
 if __name__ == "__main__":
     # Ensure Ollama has these models pulled: 'ollama pull gemma:2b' and 'ollama pull gemma:7b'
-    MODELS = ["gemma:2b","qwen2.5:0.5b"]
+    MODELS = ["qwen2.5:0.5b","qwen2.5:1.5b","qwen2.5:3b","qwen2.5:7b","gemma3:270m","gemma3:1b","gemma3:4b"]
     LEVELS = ["none", "low", "medium", "high"]
     TOPIC = "literature review on environmental sustainability of AI"
-    REPETITIONS = 3 
+    REPETITIONS = 5
     
     for model in MODELS:
         for level in LEVELS:
