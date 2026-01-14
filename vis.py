@@ -3,107 +3,85 @@ import json
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
 
-params = {'font.size': 18,
-#          'font.weight': 'bold',
-          'axes.labelsize':18,
-          'axes.titlesize':18,
-#          'axes.labelweight':'bold',
-          'axes.titleweight':'bold',
-          'legend.fontsize': 18,
-         }
-matplotlib.rcParams.update(params)
-
-def parse_carbon_data(log_dir="carbon_logs"):
+def visualize_results(log_root="carbon_logs"):
     """
-    Parses metadata and carbon logs to aggregate results.
-    Expects meta_*.json files and carbontracker.log.
+    Identifies the most recent session folder within carbon_logs and generates 
+    a comparative analysis of absolute and normalized energy metrics.
     """
+    session_folders = sorted(glob.glob(os.path.join(log_root, "session_*")))
+    if not session_folders:
+        print(f"No experimental sessions found in {log_root}.")
+        return
+    
+    target_dir = session_folders[-1]
+    print(f"[Analysis] Parsing most recent session: {target_dir}")
+    
+    meta_files = glob.glob(os.path.join(target_dir, "meta_*.json"))
+    if not meta_files:
+        print(f"No metadata files found in {target_dir}.")
+        return
+    
     results = {}
-    
-    # Get all metadata files
-    meta_files = glob.glob(os.path.join(log_dir, "meta_*.json"))
-    
-    # In a real scenario, we would parse the actual carbontracker.log.
-    # We correlate measured energy and carbon by timestamp in the metadata.
-    
     for meta_path in meta_files:
-        with open(meta_path, 'r') as f:
-            meta = json.load(f)
-        
-        model = meta['model']
-        agency = meta['agency_level']
-        
-        if model not in results:
-            results[model] = {level: [] for level in ["none", "low", "medium", "high"]}
-        
-        # Logic to simulate expected energy/carbon trends
-        # In actual use, replace these with values extracted from carbontracker logs
-        base_values = {"none": 0.05, "low": 0.15, "medium": 0.35, "high": 0.85}
-        model_multiplier = 1.0 if "2b" in model else 3.5
-        
-        # Adding random variance to simulate real error bars from repeats
-        measured_value = (base_values[agency] * model_multiplier) + np.random.normal(0, 0.02 * model_multiplier)
-        
-        results[model][agency].append(measured_value)
-    
-    return results
+        try:
+            with open(meta_path, 'r') as f:
+                meta = json.load(f)
+            model, agency = meta.get('model'), meta.get('agency_level')
+            m = meta.get('metrics', {})
+            if not model or not agency: continue
+            if model not in results:
+                results[model] = {l: {"gpu": [], "cpu": [], "total": [], "co2": []} 
+                                 for l in ["none", "low", "medium", "high"]}
+            g_e = m.get("gpu_energy_kwh", 0); c_e = m.get("cpu_energy_kwh", 0)
+            results[model][agency]["gpu"].append(g_e)
+            results[model][agency]["cpu"].append(c_e)
+            results[model][agency]["total"].append(m.get("total_energy_kwh", g_e + c_e))
+            results[model][agency]["co2"].append(m.get("total_co2eq_g", 0))
+        except (json.JSONDecodeError, IOError): continue
 
-def plot_carbon_footprint(results):
-    fig, ax1 = plt.subplots(figsize=(12, 7))
-    
+    fig, axs = plt.subplots(2, 3, figsize=(18, 12), sharex='col')
     levels = ["none", "low", "medium", "high"]
     colors = {'gemma:2b': '#4285F4', 'gemma:7b': '#EA4335'}
     
-    # Conversion factor: gCO2eq to kWh (this depends on the local grid intensity)
-    # Typical US average is ~400g/kWh. Adjust as per carbontracker's reported intensity.
-    CARBON_INTENSITY_FACTOR = 400.0 
-
     for model, data in results.items():
-        means = []
-        stds = []
+        b_gpu = np.mean(data["none"]["gpu"]) if data["none"]["gpu"] else 1e-10
+        b_cpu = np.mean(data["none"]["cpu"]) if data["none"]["cpu"] else 1e-10
+        b_tot = np.mean(data["none"]["total"]) if data["none"]["total"] else (b_gpu + b_cpu)
         
-        for level in levels:
-            vals = data.get(level, [])
-            if vals:
-                means.append(np.mean(vals))
-                stds.append(np.std(vals))
-            else:
-                means.append(0)
-                stds.append(0)
+        m_vals = {k: [] for k in ["t", "g", "c", "nt", "ng", "nc"]}
+        s_vals = {k: [] for k in ["t", "g", "c", "nt", "ng", "nc"]}
         
-        ax1.errorbar(levels, means/means[0], yerr=stds/stds[0], label=f"{model}", 
-                     fmt='-o', capsize=5, color=colors.get(model, None), 
-                     linewidth=3, markersize=8)
+        for l in levels:
+            g_v, c_v = np.array(data[l]["gpu"]), np.array(data[l]["cpu"])
+            t_v = np.array(data[l]["total"]) if data[l]["total"] else (g_v + c_v)
+            m_vals["t"].append(np.mean(t_v)); s_vals["t"].append(np.std(t_v))
+            m_vals["g"].append(np.mean(g_v)); s_vals["g"].append(np.std(g_v))
+            m_vals["c"].append(np.mean(c_v)); s_vals["c"].append(np.std(c_v))
+            m_vals["nt"].append(np.mean(t_v / b_tot)); s_vals["nt"].append(np.std(t_v / b_tot))
+            m_vals["ng"].append(np.mean(g_v / b_gpu)); s_vals["ng"].append(np.std(g_v / b_gpu))
+            m_vals["nc"].append(np.mean(c_v / b_cpu)); s_vals["nc"].append(np.std(c_v / b_cpu))
 
-    # Left Axis: Carbon Footprint
-    ax1.set_xlabel("Agency Level ", fontsize=18)
-    ax1.set_ylabel("Estimated Carbon Footprint (relative)", fontsize=18, color='black')
-    ax1.tick_params(axis='y', labelcolor='black')
-    ax1.grid(True, linestyle='--', alpha=0.7)
-    ax1.plot(levels,np.ones(len(levels)),'--')
-    
-    # Right Axis: Energy Consumption
-    ax2 = ax1.twinx()
-    
-    # We set the limits of ax2 to match ax1 scaled by the conversion factor
-    y1_min, y1_max = ax1.get_ylim()
-    ax2.set_ylim(y1_min / CARBON_INTENSITY_FACTOR*1000, y1_max / CARBON_INTENSITY_FACTOR*1000)
-    ax2.set_ylabel("Estimated Energy Consumption (relative)", fontsize=18, color='#555555')
-    ax2.tick_params(axis='y', labelcolor='#555555')
+        col = colors.get(model)
+        for i, k in enumerate(["t", "g", "c"]):
+            axs[0, i].errorbar(levels, m_vals[k], yerr=s_vals[k], label=model, fmt='-o', capsize=4, color=col)
+            axs[1, i].errorbar(levels, m_vals["n"+k], yerr=s_vals["n"+k], label=model, fmt='-o', capsize=4, color=col)
 
-    #plt.title("Carbon Footprint & Energy vs. Agentic Agency Level", fontsize=14, fontweight='bold')
-    ax1.legend(title="Model Variant", loc='upper left')
+    titles = ["Total Energy (kWh)", "GPU Energy (kWh)", "CPU Energy (kWh)"]
+    for i, title in enumerate(titles):
+        axs[0, i].set_title(f"Absolute {title}", fontweight='bold')
+        axs[1, i].set_title(f"Normalized {title} (None=1)", fontweight='bold')
+        axs[1, i].set_xlabel("Agency Level")
+        axs[1, i].axhline(y=1.0, color='black', linestyle='-', alpha=0.2)
     
-    plt.tight_layout()
-    plt.savefig("carbon_agency_analysis.png",dpi=300)
-    print("Plot generated and saved as carbon_agency_analysis.png")
+    for ax in axs.flat:
+        ax.grid(True, linestyle=':', alpha=0.5); ax.legend(loc='best', fontsize='small')
+
+    plt.suptitle(f"Agentic Energy Analysis: Session {os.path.basename(target_dir)}", fontsize=16, fontweight='bold')
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(os.path.join(target_dir, "comparative_analysis.png"), dpi=300)
+    print(f"Analysis saved to {target_dir}/comparative_analysis.png")
     plt.show()
 
 if __name__ == "__main__":
-    if os.path.exists("carbon_logs"):
-        data_results = parse_carbon_data("carbon_logs")
-        plot_carbon_footprint(data_results)
-    else:
-        print("Log directory 'carbon_logs' not found. Run the experiment script first.")
+    visualize_results()
