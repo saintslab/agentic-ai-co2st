@@ -9,7 +9,7 @@ from carbontracker.tracker import CarbonTracker
 from ddgs import DDGS
 import ollama
 
-MAX_RES = 2
+MAX_RES = 5
 
 class GemmaLocalAgenticTask:
     def __init__(self, model_name="gemma:2b", agency_level="none"):
@@ -40,12 +40,12 @@ class GemmaLocalAgenticTask:
         print(f"Starting Local Gemma {self.agency_level} agency task for: {keywords}")
         all_retrieved_results = []
         
-        if self.agency_level == "none":
+        if self.agency_level == "low":
             system_instruction = "You are a senior research scientist. Write a dense, scientific literature review based entirely on your internal training data. Do not use bullet points or lists."
             content = self._generate(system_instruction, f"Topic: {keywords}")
             return f"{content}\n\n{self._format_sources([])}"
        
-        elif self.agency_level == "low":
+        elif self.agency_level == "none":
             try:
                 primary_results = list(self.ddgs.text(keywords, max_results=MAX_RES))
                 all_retrieved_results.extend(primary_results)
@@ -174,7 +174,8 @@ def run_experiment(model_name, agency_level, keywords, run_index, session_dir,re
             f.write(report)
 
 if __name__ == "__main__":
-    MODELS = ["qwen2.5:0.5b","qwen2.5:1.5b","qwen2.5:3b","qwen2.5:7b","gemma3:270m","gemma3:1b","gemma3:4b"]
+    #MODELS = ["qwen2.5:0.5b","qwen2.5:1.5b","qwen2.5:3b","qwen2.5:7b","gemma3:270m","gemma3:1b","gemma3:4b"]
+    MODELS = ["gemma3:270m","qwen2.5:0.5b","gemma3:4b","qwen2.5:7b"]
     LEVELS, REPS = ["none", "low", "medium", "high"], 3
     TOPIC = "literature review on environmental sustainability of AI"
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
